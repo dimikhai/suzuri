@@ -30,7 +30,7 @@ pub use render::{
     StyleProblem, StyleSource, document_style, document_style_source, parse_cite_suffix,
     render_bibliography, render_document, render_reference, resolve_bundled, resolve_style,
     resolve_style_readonly, style_file_candidates, style_from_xml, style_named, style_names,
-    style_or_default,
+    style_or_default, style_xml,
 };
 
 /// The folders a note's relative paths (a `csl:` file) resolve against: the

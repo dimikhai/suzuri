@@ -24,6 +24,17 @@ pub use hayagriva::citationberg::taxonomy::Locator;
 /// The style used when a document names none.
 pub const DEFAULT_STYLE: &str = "apa";
 
+/// The bundled style called `name` as CSL XML.
+///
+/// Hayagriva renders the preview's own citations from its decoded form, but an
+/// external converter speaks CSL and nothing else. Re-serializing the archived
+/// style is what lets an exported document carry the same style the preview
+/// shows, rather than falling back to whatever default the converter ships.
+pub fn style_xml(name: &str) -> Option<String> {
+    let name = name.trim().trim_end_matches(".csl").to_ascii_lowercase();
+    ArchivedStyle::by_name(&name)?.get().to_xml().ok()
+}
+
 /// A CSL style ready to render with. Decoding one from the archive costs a
 /// few milliseconds, so they are cached by name for the life of the process.
 pub struct CslStyle {
