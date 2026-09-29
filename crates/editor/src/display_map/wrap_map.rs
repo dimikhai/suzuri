@@ -1891,12 +1891,14 @@ mod tests {
         log::info!("TabMap text: {:?}", tabs_snapshot.text());
 
         let mut line_wrapper = text_system.line_wrapper(font.clone(), font_size);
+        let mut fragment_builder = LineFragmentBuilder::new(text_system.clone(), &font, font_size);
         let mut indent_adjustment = IndentAdjustment::default();
         let expected_text = wrap_text(
             &tabs_snapshot,
             wrap_width,
             indent_adjustment,
             &mut line_wrapper,
+            &mut fragment_builder,
         );
 
         let (wrap_map, _) =
@@ -1999,6 +2001,7 @@ mod tests {
                 wrap_width,
                 indent_adjustment,
                 &mut line_wrapper,
+                &mut fragment_builder,
             );
             let (mut snapshot, wrap_edits) =
                 wrap_map.update(cx, |map, cx| map.sync(tabs_snapshot.clone(), tab_edits, cx));
@@ -2118,20 +2121,50 @@ mod tests {
         wrap_width: Option<Pixels>,
         indent_adjustment: IndentAdjustment,
         line_wrapper: &mut LineWrapper,
+        fragment_builder: &mut LineFragmentBuilder,
     ) -> String {
         if let Some(wrap_width) = wrap_width {
+            // SUZURI: begin. The wrap map lays out a rendered chunk (a fold placeholder)
+            // as one unbreakable element, so the reference must too.
+            let mut row_fragments = vec![Vec::new()];
+            for chunk in tab_snapshot.chunks(
+                TabPoint::zero()..tab_snapshot.max_point(),
+                LanguageAwareStyling {
+                    tree_sitter: false,
+                    diagnostics: false,
+                },
+                Highlights::default(),
+            ) {
+                if chunk.renderer.is_some() {
+                    let width = fragment_builder.text_width(chunk.text);
+                    if let Some(fragments) = row_fragments.last_mut() {
+                        fragments.push(LineFragment::element(width, chunk.text.len()));
+                    }
+                    continue;
+                }
+                for (ix, text) in chunk.text.split('\n').enumerate() {
+                    if ix > 0 {
+                        row_fragments.push(Vec::new());
+                    }
+                    if let Some(fragments) = row_fragments.last_mut() {
+                        fragments.push(LineFragment::text(text));
+                    }
+                }
+            }
+            // SUZURI: end
             let mut wrapped_text = String::new();
-            for (row, line) in tab_snapshot.text().split('\n').enumerate() {
+            for ((row, line), fragments) in tab_snapshot
+                .text()
+                .split('\n')
+                .enumerate()
+                .zip(&row_fragments)
+            {
                 if row > 0 {
                     wrapped_text.push('\n');
                 }
 
                 let mut prev_ix = 0;
-                for boundary in line_wrapper.wrap_line(
-                    &[LineFragment::text(line)],
-                    wrap_width,
-                    indent_adjustment,
-                ) {
+                for boundary in line_wrapper.wrap_line(fragments, wrap_width, indent_adjustment) {
                     wrapped_text.push_str(&line[prev_ix..boundary.ix]);
                     wrapped_text.push('\n');
                     wrapped_text.push_str(&" ".repeat(boundary.next_indent as usize));
